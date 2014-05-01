@@ -1,9 +1,6 @@
 #
 # Vincent Lantaca
-# Vincent Harn  
-# Phat Trinh
-#
-# Makefile to make autotune.c and soundecho.c
+# Makefile to make bit_detect.c
 #
 
 CC = gcc

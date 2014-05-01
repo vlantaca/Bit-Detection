@@ -73,11 +73,11 @@ int main(int argc, char **argv) {
 					 manchester bit, we can now print out the bit
 					*/
 						if (manchester1 == 1 && manchester2 == 0){
-							//printf("%d.) 0 detected\n", index);
+							printf("%d.) 0 detected\n", index);
 							manchester1 = 2;
 							manchester2 = 2;
 						}else if(manchester1 == 0 && manchester2 == 1){
-							//printf("%d.) 1 detected\n", index);
+							printf("%d.) 1 detected\n", index);
 							manchester1 = 2;
 							manchester2 = 2;
 						}
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
 				low_length = 0;
 				if (START_DETECTED == 0){
 					START_DETECTED = 1;
-					//printf("%d.) START_BIT_DETECTED\n", index);
+					printf("%d.) START_BIT_DETECTED\n", index);
 				}else if (START_DETECTED == 1){
 					if (current_half == 0){
 						manchester1 = 1;
@@ -107,11 +107,11 @@ int main(int argc, char **argv) {
 						 manchester bit, we can now print out the bit
 						*/
 						if (manchester1 == 1 && manchester2 == 0){
-							//printf("%d.) 0 detected\n", index);
+							printf("%d.) 0 detected\n", index);
 							manchester1 = 2;
 							manchester2 = 2;
 						}else if(manchester1 == 0 && manchester2 == 1){
-							//printf("%d.) 1 detected\n", index);
+							printf("%d.) 1 detected\n", index);
 							manchester1 = 2;
 							manchester2 = 2;
 						}
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
 			index++;
 		}
 
-		printf("%zu\n", abs( (double)number ));
+		//printf("%zu\n", abs( (double)number ));
 
 		sample_count++;
       }
