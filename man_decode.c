@@ -13,12 +13,12 @@
 #define DEBUG
 
 #define MAX_BUF             1000000
-#define SAMPLES_PER_CHECK   48
-#define HIGH_MIN_AVG        275000
+#define SAMPLES_PER_CHECK   32
+#define HIGH_MIN_AVG        300000
 #define LOW_STATE           0
 #define HIGH_STATE          1
 #define UNKNOWN_STATE       -1
-#define HALF_PERIOD_TC      256
+#define HALF_PERIOD_TC      215
 
 typedef enum { false, true } bool;
 
@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
 
     fclose(file_in);
     fclose(file_out);
+
 #ifdef DEBUG
     printf("Total number of samples: %d\n", num_samples);
 #endif
@@ -77,7 +78,7 @@ int main(int argc, char **argv) {
         int nextSamples = 0;
 
         // Find average value for the prev and next set of point around the expected edge
-        for (j = 0; j < SAMPLES_PER_CHECK && i+j < num_samples && i-j > 0; j++) {
+        for (j = 0; j < SAMPLES_PER_CHECK && i+j < num_samples; j++) {
             //prevSamples += samples[i-j];
             nextSamples += samples[i+j];
         }
@@ -113,6 +114,7 @@ int main(int argc, char **argv) {
 
 #ifdef DEBUG
     printf("Half Period count: %d\n",halfPeriodCount);
+    printf("doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState,curState, lastState, secondLastState);
 #endif
 
                 // Reset half period count
@@ -121,18 +123,18 @@ int main(int argc, char **argv) {
                 // Check if this is the first pass after the start edge
                 if (firstHalfPeriod) {
                     if (curState == HIGH_STATE) doubleState = HIGH_STATE;
-                    secondLastState = lastState;
-                    lastState = curState;
+                    //secondLastState = lastState;
+                    //lastState = curState;
+                    firstHalfPeriod = false;
 
 #ifdef DEBUG
-    printf("First Half Period- curState:%d lastState:%d secondLastState:%d\n", curState, lastState, secondLastState);
+    printf("First Half Period- doubleState:%d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
 #endif
 
-                    firstHalfPeriod = false;
                 }
                 // Check for bit flip
                 else if (curState != lastState && doubleState != curState) {
-                    
+
 #ifdef DEBUG
     printf("***** %d detected between samples %d to %d\n", curState, i, i+j);
 #endif                    
@@ -147,9 +149,11 @@ int main(int argc, char **argv) {
                     doubleState = curState;
                     secondLastState = lastState;
                     lastState = curState;
+
 #ifdef DEBUG
-    printf("NonFlip- curState:%d lastState:%d secondLastState:%d\n", curState, lastState, secondLastState);
+    printf("NonFlip- doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
 #endif
+
                 }
             }
             
