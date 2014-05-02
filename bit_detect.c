@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
       */
       int current_half = 0;
       int low_length = 0;
-   	  int high_length = 0;
+      int high_length = 0;
 
       char ch1, ch2;
       int number1, number2, number;
