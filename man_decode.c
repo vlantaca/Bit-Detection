@@ -10,8 +10,8 @@
 #include <math.h>
 
 // Comment out to remove DEBUG prints
-#define DEBUG
-#define DEBUG_SUM
+//#define DEBUG
+//#define DEBUG_SUM
 
 #define MAX_BUF                 1000000
 #define HIGH_MIN_AVG            175000
