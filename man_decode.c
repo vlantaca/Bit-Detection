@@ -12,6 +12,7 @@
 // Comment out to remove DEBUG prints
 //#define DEBUG
 //#define DEBUG_SUM
+#define DEBUG_READ
 
 #define MAX_BUF                 1000000
 #define HIGH_MIN_AVG            175000
@@ -145,7 +146,7 @@ int main(int argc, char **argv) {
                 
                 // Check if this is the first pass after the start edge
                 if (firstHalfPeriod) {
-                    if (curState == HIGH_STATE) doubleState = HIGH_STATE;
+                    //if (curState == HIGH_STATE) doubleState = HIGH_STATE;
                     firstHalfPeriod = false;
 
                     #ifdef DEBUG
@@ -181,7 +182,6 @@ int main(int argc, char **argv) {
                         printf("    !!!!! curState:%d lastState:%d secondLastState:%d\n", curState, lastState, secondLastState);
                         printf("\n\n");
                     #endif
-
                 }
 
                 // Push state down the line
@@ -197,13 +197,22 @@ int main(int argc, char **argv) {
         }
     }
 
+
+    #ifdef DEBUG_READ
+        printf("    Little Endian Binary Input: ");
+        for(int bit_itor = 0; bit_itor < bit_num; bit_itor++) {
+            printf("%d", decoded_data[bit_itor]);
+            if (bit_itor%8 == 7) printf(" ");
+        }
+        printf("\n");
+    #endif
     
     // Convert resulting "bits" to bytes. data is Little Endian
-    printf("\n\n\nDecoded Bytes:\n");
+    printf("\nDecoded Bytes:\n");
     int byte_val = 0;
     int power = 7;
-    for (i = bit_num; i >= 0; i--) {
-        byte_val += pow(2,power) * decoded_data[i];
+    for (i = bit_num-1; i >= 0; i--) {
+        byte_val += (int)pow(2,power) * decoded_data[i];
         power--;
         if (power < 0) {
             printf("0x%x\n",byte_val);
