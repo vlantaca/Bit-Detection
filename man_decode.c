@@ -11,15 +11,16 @@
 
 // Comment out to remove DEBUG prints
 #define DEBUG
+#define DEBUG_SUM
 
-#define MAX_BUF             1000000
-#define HIGH_MIN_AVG        300000
-#define LOW_STATE           0
-#define HIGH_STATE          1
-#define UNKNOWN_STATE       -1
-#define HALF_PERIOD_TC      240
-#define NUM_SAMPLES_PER_PERIOD 6
-#define SAMPLES_PER_CHECK   HALF_PERIOD_TC / NUM_SAMPLES_PER_PERIOD
+#define MAX_BUF                 1000000
+#define HIGH_MIN_AVG            175000
+#define LOW_STATE               0
+#define HIGH_STATE              1
+#define UNKNOWN_STATE           -1
+#define HALF_PERIOD_TC          216     // Tested working for one byte/msg
+#define NUM_SAMPLES_PER_PERIOD  8       // Tested working for one byte/msg 
+#define SAMPLES_PER_CHECK       HALF_PERIOD_TC / NUM_SAMPLES_PER_PERIOD
 
 typedef enum { false, true } bool;
 
@@ -74,22 +75,19 @@ int main(int argc, char **argv) {
     int halfPeriodSum = 0;
     // Traverse through all samples applying Manchester Decode
     for (i = 0; i < num_samples; i += SAMPLES_PER_CHECK) {
-        //int avgSamplePrev = 0;
+        int avgSamplePrev = 0;
         int avgSampleNext = 0;
-        //int prevSamples = 0;
+        int prevSamples = 0;
         int nextSamples = 0;
 
         // Find average value for the prev and next set of point around the expected edge
         for (j = 0; j < SAMPLES_PER_CHECK && i+j < num_samples; j++) {
-            //prevSamples += samples[i-j];
+            prevSamples += samples[i-j];
             nextSamples += samples[i+j];
         }
-        //avgSamplePrev = prevSamples / SAMPLES_PER_CHECK
+        avgSamplePrev = prevSamples / SAMPLES_PER_CHECK;
         avgSampleNext = nextSamples / j;
 
-        #ifdef DEBUG
-            printf("Avg for samples %d to %d: %d\n",i ,i+j , avgSampleNext);
-        #endif
         // Associate current bit value based on min/max values and check if it's the start bit
         if ( avgSampleNext >= HIGH_MIN_AVG ) {
             curState = HIGH_STATE;
@@ -97,33 +95,52 @@ int main(int argc, char **argv) {
             if (!startEdge) {
 
         #ifdef DEBUG
-            printf("!!!!! Start between samples %d to %d\n",i ,i+j);
+            printf("    !!!!! Start between samples %d to %d\n\n\n",i ,i+j);
         #endif
 
                 startEdge = true;
                 firstHalfPeriod = true;
-                halfPeriodCount = 32;
+                halfPeriodCount = SAMPLES_PER_CHECK;
+                halfPeriodSum = 0;
                 doubleState = LOW_STATE;
             }
         } else {
             curState = LOW_STATE;
         }
 
+        halfPeriodSum += avgSampleNext;
+
+
+        #ifdef DEBUG
+            printf("Avg for samples %d to %d: %d\n",i ,i+j , avgSampleNext);
+        #endif
+
         // When start flag is set check for data
         if (startEdge) {
-            
             // Increment and check if half period is finished
             halfPeriodCount += j;
-            halfPeriodSum += avgSampleNext;
-            if (halfPeriodCount >= HALF_PERIOD_TC) {
-                curState = ((halfPeriodSum/NUM_SAMPLES_PER_PERIOD) > HIGH_MIN_AVG);
-                halfPeriodSum = 0;
-            #ifdef DEBUG
-                printf("Half Period count: %d\n",halfPeriodCount);
-                printf("Half Period Start- doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState,curState, lastState, secondLastState);
-            #endif
+            if (halfPeriodCount == HALF_PERIOD_TC) {
+                if ((halfPeriodSum / NUM_SAMPLES_PER_PERIOD) > HIGH_MIN_AVG) {
+                    curState = HIGH_STATE;
+                } else {
+                    curState = LOW_STATE;
+                }
+                
 
-                // Reset half period count
+                #ifdef DEBUG
+                    printf("Half Period Start- doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
+                #endif
+
+                #ifdef DEBUG_SUM
+                    printf("Half period sum: %d\n", halfPeriodSum);
+                    printf("Number of samples per period: %d\n", NUM_SAMPLES_PER_PERIOD);
+                    printf("Half period Average: %d && Cutoff: %d\n", (halfPeriodSum / NUM_SAMPLES_PER_PERIOD), HIGH_MIN_AVG);
+                    printf("Half period State: %d\n", (halfPeriodSum / NUM_SAMPLES_PER_PERIOD) > HIGH_MIN_AVG);
+                    printf("Half Period Count: %d\n",halfPeriodCount);
+                #endif
+
+                // Reset half period count and sumation
+                halfPeriodSum = 0;
                 halfPeriodCount = 0;
                 
                 // Check if this is the first pass after the start edge
@@ -132,17 +149,15 @@ int main(int argc, char **argv) {
                     firstHalfPeriod = false;
 
                     #ifdef DEBUG
-                        printf("First Half Period- doubleState:%d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
+                        printf("    First Half Period- doubleState:%d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
                     #endif
 
                 }
                 // Check for bit flip
                 else if (curState != lastState && doubleState != curState) {
-                    secondLastState = lastState;
-                    lastState = curState;
 
                     #ifdef DEBUG
-                        printf("***** %d detected between samples %d to %d\n", curState, i, i+j);
+                        printf("            ***** %d detected between samples %d to %d\n", curState, i, i+j);
                     #endif                    
 
                     decoded_data[bit_num] = curState;
@@ -151,11 +166,9 @@ int main(int argc, char **argv) {
                 // Check for non bit flip
                 else if (curState == lastState && lastState != secondLastState) {
                     doubleState = curState;
-                    secondLastState = lastState;
-                    lastState = curState;
 
                     #ifdef DEBUG
-                        printf("NonFlip- doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
+                        printf("    NonFlip- doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
                     #endif
 
                 }
@@ -164,29 +177,33 @@ int main(int argc, char **argv) {
                     startEdge = false;
 
                     #ifdef DEBUG
-                        printf("!!!!! End of transmission detected between samples %d to %d\n", i, i+j);
-                        printf("!!!!! curState:%d lastState:%d secondLastState:%d\n", curState, lastState, secondLastState);
+                        printf("    !!!!! End of transmission detected between samples %d to %d\n", i, i+j);
+                        printf("    !!!!! curState:%d lastState:%d secondLastState:%d\n", curState, lastState, secondLastState);
+                        printf("\n\n");
                     #endif
 
                 }
-                /*else {
-                    printf("8=====D Blowing it!\n");
-                    printf("8=====D doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
-                }*/
+
+                // Push state down the line
+                secondLastState = lastState;
+                lastState = curState;
 
                 #ifdef DEBUG
                     printf("Half Period count: %d\n",halfPeriodCount);
-                    printf("Half Period End- doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState,curState, lastState, secondLastState);
+                    printf("Half Period sum: %d\n", halfPeriodSum);
+                    printf("Half Period End- doubleState: %d curState:%d lastState:%d secondLastState:%d\n\n\n", doubleState,curState, lastState, secondLastState);
                 #endif
             }
         }
     }
 
+    
     // Convert resulting "bits" to bytes. data is Little Endian
+    printf("\n\n\nDecoded Bytes:\n");
     int byte_val = 0;
     int power = 7;
     for (i = bit_num; i >= 0; i--) {
-        byte_val += pow(2,power) * decoded_data[bit_num];
+        byte_val += pow(2,power) * decoded_data[i];
         power--;
         if (power < 0) {
             printf("0x%x\n",byte_val);
@@ -194,7 +211,7 @@ int main(int argc, char **argv) {
             byte_val = 0;
         }
     }
-
+    
 
     return 0;
 }
