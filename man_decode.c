@@ -10,8 +10,9 @@
 #include <math.h>
 
 // Comment out to remove DEBUG prints
-//#define DEBUG
-//#define DEBUG_SUM
+#define DEBUG
+#define DEBUG_SUM
+#define DEBUG_READ
 
 #define MAX_BUF                 1000000
 #define HIGH_MIN_AVG            175000
@@ -32,7 +33,10 @@ int main(int argc, char **argv) {
     int doubleState = LOW_STATE;
     int curState = LOW_STATE;
     int lastState = UNKNOWN_STATE;
-    int secondLastState = UNKNOWN_STATE;
+    int lastSampleEdge = 0;
+    int curWindowState = LOW_STATE;
+    int lastWindowState = UNKNOWN_STATE;
+    int secondLastWindowState = UNKNOWN_STATE;
     int decoded_data[MAX_BUF];
     int bit_num = 0;
 
@@ -117,19 +121,36 @@ int main(int argc, char **argv) {
 
         // When start flag is set check for data
         if (startEdge) {
+            // Grab edge
+            if (curState != lastState) {
+                lastSampleEdge = i;
+            }
+
             // Increment and check if half period is finished
             halfPeriodCount += j;
             if (halfPeriodCount == HALF_PERIOD_TC) {
+                // Assign window state and adjust off set from last edge
                 if ((halfPeriodSum / NUM_SAMPLES_PER_PERIOD) > HIGH_MIN_AVG) {
-                    curState = HIGH_STATE;
+                    curWindowState = HIGH_STATE;
                 } else {
-                    curState = LOW_STATE;
+                    curWindowState = LOW_STATE;
                 }
-                
 
                 #ifdef DEBUG
-                    printf("Half Period Start- doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
+                    printf("Half Period Start- curState: %d oubleState: %d curWindowState:%d lastWindowState:%d secondLastWindowState:%d\n", curState, doubleState, curWindowState, lastWindowState, secondLastWindowState);
                 #endif
+
+                if (curWindowState != curState){
+                    #ifdef DEBUG
+                        printf("Last sample starting point: %d\n", i);
+                    #endif
+
+                    i = lastSampleEdge - SAMPLES_PER_CHECK;
+                    
+                    #ifdef DEBUG
+                        printf("Next sample starting point: %d\n", i);
+                    #endif
+                }
 
                 #ifdef DEBUG_SUM
                     printf("Half period sum: %d\n", halfPeriodSum);
@@ -145,73 +166,93 @@ int main(int argc, char **argv) {
                 
                 // Check if this is the first pass after the start edge
                 if (firstHalfPeriod) {
-                    if (curState == HIGH_STATE) doubleState = HIGH_STATE;
+                    //if (curState == HIGH_STATE) doubleState = HIGH_STATE;
                     firstHalfPeriod = false;
 
                     #ifdef DEBUG
-                        printf("    First Half Period- doubleState:%d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
+                        printf("    First Half Period- doubleState:%d curWindowState:%d lastWindowState:%d secondLastWindowState:%d\n", doubleState, curState, lastWindowState, secondLastWindowState);
                     #endif
 
                 }
                 // Check for bit flip
-                else if (curState != lastState && doubleState != curState) {
+                else if (curWindowState != lastWindowState && doubleState != curWindowState) {
 
                     #ifdef DEBUG
-                        printf("            ***** %d detected between samples %d to %d\n", curState, i, i+j);
+                        printf("            ***** %d detected between samples %d to %d\n", curWindowState, i, i+j);
                     #endif                    
 
-                    decoded_data[bit_num] = curState;
+                    decoded_data[bit_num] = curWindowState;
                     bit_num++;
                 }
                 // Check for non bit flip
-                else if (curState == lastState && lastState != secondLastState) {
-                    doubleState = curState;
+                else if (curWindowState == lastWindowState && lastWindowState != secondLastWindowState) {
+                    doubleState = curWindowState;
 
                     #ifdef DEBUG
-                        printf("    NonFlip- doubleState: %d curState:%d lastState:%d secondLastState:%d\n", doubleState, curState, lastState, secondLastState);
+                        printf("    NonFlip- doubleState: %d curWindowState:%d lastWindowState:%d secondLastWindowState:%d\n", doubleState, curWindowState, lastWindowState, secondLastWindowState);
                     #endif
 
                 }
                 // Reset input stream last three states are equivalent
-                else if (curState == lastState && lastState == secondLastState) {
+                else if (curWindowState == lastWindowState && lastWindowState == secondLastWindowState) {
                     startEdge = false;
 
                     #ifdef DEBUG
                         printf("    !!!!! End of transmission detected between samples %d to %d\n", i, i+j);
-                        printf("    !!!!! curState:%d lastState:%d secondLastState:%d\n", curState, lastState, secondLastState);
+                        printf("    !!!!! curWindowState:%d lastWindowState:%d secondLastWindowState:%d\n", curWindowState, lastWindowState, secondLastWindowState);
                         printf("\n\n");
                     #endif
 
+                    // Convert resulting "bits" to bytes. data is Little Endian
+                    printf("\nDecoded Bytes:\n");
+                    int byte_val = 0;
+                    int power = 0;
+                    for (int byte_itor = 0; byte_itor < bit_num; byte_itor++) {
+                        byte_val += (int)pow(2,power) * decoded_data[byte_itor];
+                        power++;
+                        if (power < 8) {
+                            printf("0x%x\n",byte_val);
+                            power = 0;
+                            byte_val = 0;
+                        }
+                        if (byte_itor%32 == 0) printf("\n");
+
+                    /*for (int byte_itor = bit_num-1; byte_itor >= 0; byte_itor--) {
+                        byte_val += (int)pow(2,power) * decoded_data[byte_itor];
+                        power--;
+                        if (power < 0) {
+                            printf("0x%x\n",byte_val);
+                            power = 7;
+                            byte_val = 0;
+                        }
+                        if (byte_itor%32 == 0) printf("\n");
+                    }*/
+                    }
                 }
 
                 // Push state down the line
-                secondLastState = lastState;
-                lastState = curState;
+                secondLastWindowState = lastWindowState;
+                lastWindowState = curWindowState;
 
                 #ifdef DEBUG
                     printf("Half Period count: %d\n",halfPeriodCount);
                     printf("Half Period sum: %d\n", halfPeriodSum);
-                    printf("Half Period End- doubleState: %d curState:%d lastState:%d secondLastState:%d\n\n\n", doubleState,curState, lastState, secondLastState);
+                    printf("Half Period End- doubleState: %d curWindowState:%d lastWindowState:%d secondLastWindowState:%d\n\n\n", doubleState, curWindowState, lastWindowState, secondLastWindowState);
                 #endif
             }
         }
     }
 
-    
-    // Convert resulting "bits" to bytes. data is Little Endian
-    printf("\n\n\nDecoded Bytes:\n");
-    int byte_val = 0;
-    int power = 7;
-    for (i = bit_num; i >= 0; i--) {
-        byte_val += pow(2,power) * decoded_data[i];
-        power--;
-        if (power < 0) {
-            printf("0x%x\n",byte_val);
-            power = 7;
-            byte_val = 0;
+
+    #ifdef DEBUG_READ
+        printf("    Little Endian Binary Input:\n");
+        for(int bit_itor = 0; bit_itor < bit_num; bit_itor++) {
+            if (bit_itor%32 == 0) printf("\n");
+            printf("%d", decoded_data[bit_itor]);
+            if (bit_itor%8 == 7) printf(" ");
         }
-    }
-    
+        printf("\n");
+    #endif
 
     return 0;
 }
